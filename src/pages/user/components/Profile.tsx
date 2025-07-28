@@ -68,6 +68,7 @@ const Profile: React.FC = () => {
           window.location.href = '/login';
           setLoading(false);
           return;
+
         }
 
         const res = await fetch('http://localhost:5118/api/Auth/profile', {
@@ -78,7 +79,7 @@ const Profile: React.FC = () => {
         });
         
         if (res.status === 401) {
-          setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+          setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'); 
           window.location.href = '/login';
           localStorage.removeItem('token');
           return;

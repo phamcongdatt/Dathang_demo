@@ -10,7 +10,6 @@ import Menus from './pages/user/components/Menus';
 import Cart from './pages/user/components/Cart';
 import Orders from './pages/user/components/Orders';
 import Profile from './pages/user/components/Profile';
-import Wishlist from './pages/user/components/Wishlist';
 import Review from './pages/user/components/Review';
 import Search from './pages/user/components/Search';
 import Location from './pages/user/components/Location';
@@ -24,6 +23,7 @@ import PaymentSuccess from './pages/user/components/PaymentSuccess';
 import PaymentFailed from './pages/user/components/PaymentFailed';
 import Checkout from './pages/user/Checkout';
 import ShippingInfo from './pages/user/ShippingInfo';
+import Wishlist from './pages/user/components/Wishlist';
 
 // Seller pages
 import SellerDashboard from './pages/seller/Dashboard';
@@ -74,6 +74,7 @@ function App() {
           <Route path="/payment-failed" element={<PaymentFailed />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/Shipping-info" element={<ShippingInfo />} />
+          <Route path="/wishlist" element={<Wishlist />} />
 
           {/* Seller routes */}
           <Route path="/seller/dashboard" element={<SellerDashboard />} />

@@ -10,6 +10,7 @@ interface Store {
   id: string;
   name: string;
   status: string;
+  statusStoreSeller: 'Open' | 'Closed';
 }
 
 interface UserProfile {
@@ -33,7 +34,7 @@ const Dashboard: React.FC = () => {
   const [stores, setStores] = useState<Store[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [productCount, setProductCount] = useState<number>(0);
-  const [categoryCount,setCategoryCount] = useState<number>(0);
+  const [categoryCount, setCategoryCount] = useState<number>(0);
   const [revenueData, setRevenueData] = useState<any[]>([]);
 
   useEffect(() => {
@@ -48,35 +49,26 @@ const Dashboard: React.FC = () => {
       }
 
       try {
-        const profileRes = await fetch('http://localhost:5118/api/Auth/profile', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (profileRes.status === 401) {
-          navigate('/login');
-          return;
-        }
+        const [profileRes, storesRes] = await Promise.all([
+          fetch('http://localhost:5118/api/Auth/profile', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }),
+          fetch('http://localhost:5118/api/Stores/mystores', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+        ]);
 
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           if (profileData.success && profileData.data) {
             setUserProfile(profileData.data);
           }
-        }
-
-        const storesRes = await fetch('http://localhost:5118/api/Stores/mystores', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (storesRes.status === 401) {
-          navigate('/login');
-          return;
         }
 
         if (!storesRes.ok) {
@@ -103,7 +95,7 @@ const Dashboard: React.FC = () => {
         const firstStore = approvedStores[0];
         const storeId = firstStore.id;
 
-        const [revenueRes, ordersRes, reviewsRes, notiRes, revenueChartRes] = await Promise.all([
+        const [revenueRes, ordersRes, reviewsRes, notiRes, revenueChartRes, menuRes] = await Promise.all([
           fetch(`http://localhost:5118/api/Revenue/store/${storeId}/overview`, {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -134,54 +126,15 @@ const Dashboard: React.FC = () => {
               'Content-Type': 'application/json',
             },
           }),
+          fetch(`http://localhost:5118/api/Menus/bystore/${storeId}`)
         ]);
 
-        let revenueTotal = 0;
-        let ordersCount = 0;
-        let reviewsCount = 0;
-        let notificationsCount = 0;
-
-        if (revenueRes.ok) {
-          const revenueData = await revenueRes.json();
-          revenueTotal = Array.isArray(revenueData) ? revenueData.reduce((sum: number, r: any) => sum + (r.totalRevenue || 0), 0) : 0;
-        }
-
-        if (ordersRes.ok) {
-          const ordersData = await ordersRes.json();
-          ordersCount = Array.isArray(ordersData) ? ordersData.length : 0;
-        }
-
-        if (reviewsRes.ok) {
-          const reviewsData = await reviewsRes.json();
-          reviewsCount = Array.isArray(reviewsData) ? reviewsData.length : 0;
-        }
-
-        if (notiRes.ok) {
-          const notiData = await notiRes.json();
-          notificationsCount = Array.isArray(notiData) ? notiData.length : 0;
-        }
-
-        if (revenueChartRes.ok) {
-          const chartData = await revenueChartRes.json();
-          setRevenueData(Array.isArray(chartData) ? chartData : []);
-        }
-
-        setRevenue(revenueTotal);
-        setOrders(ordersCount);
-        setReviews(reviewsCount);
-        setNotifications(notificationsCount);
-
-        try {
-          const menuRes = await fetch(`http://localhost:5118/api/Menus/bystore/${storeId}`);
-          if (menuRes.ok) {
-            const menuData = await menuRes.json();
-            setProductCount(Array.isArray(menuData) ? menuData.length : 0);
-          } else {
-            setProductCount(0);
-          }
-        } catch {
-          setProductCount(0);
-        }
+        setRevenue(await calculateTotal(revenueRes));
+        setOrders(await countItems(ordersRes));
+        setReviews(await countItems(reviewsRes));
+        setNotifications(await countItems(notiRes));
+        setRevenueData(await parseChartData(revenueChartRes));
+        setProductCount(await countItems(menuRes));
 
       } catch (err: any) {
         setError(err.message || 'Đã xảy ra lỗi khi tải dữ liệu');
@@ -189,6 +142,25 @@ const Dashboard: React.FC = () => {
         setLoading(false);
       }
     };
+
+    const calculateTotal = async (res: Response) => {
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return Array.isArray(data) ? data.reduce((sum: number, r: any) => sum + (r.totalRevenue || 0), 0) : 0;
+    };
+
+    const countItems = async (res: Response) => {
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return Array.isArray(data) ? data.length : 0;
+    };
+
+    const parseChartData = async (res: Response) => {
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    };
+
     fetchData();
 
     const connection = new signalR.HubConnectionBuilder()
@@ -211,14 +183,45 @@ const Dashboard: React.FC = () => {
         console.error('SignalR Connection Error:', err);
       });
 
-    connection.onclose((error) => {
-      console.error('Connection closed:', error);
-    });
-
     return () => {
       connection.stop();
     };
   }, [navigate]);
+
+  const toggleStoreStatus = async (storeId: string, currentStatus: 'Open' | 'Closed') => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const newStatus = currentStatus === 'Open' ? 'Closed' : 'Open';
+      const response = await fetch(`http://localhost:5118/api/Stores/${storeId}/Toggle-open`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newStatus),
+      });
+
+      if (response.ok) {
+        setStores(prevStores => 
+          prevStores.map(store => 
+            store.id === storeId 
+              ? {...store, statusStoreSeller: newStatus} 
+              : store
+          )
+        );
+      } else {
+        throw new Error('Cập nhật trạng thái thất bại');
+      }
+    } catch (error) {
+      console.error('Error toggling store status:', error);
+      alert('Có lỗi xảy ra khi cập nhật trạng thái cửa hàng');
+    }
+  };
 
   const renderStatusBadge = (status: string) => {
     switch (status) {
@@ -242,6 +245,24 @@ const Dashboard: React.FC = () => {
         );
     }
   };
+
+  const StatusSeller = (status: 'Open' | 'Closed') => {
+    switch(status) {
+      case 'Open':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <FiCheckCircle className="mr-1" /> Mở cửa
+          </span>
+        );
+      case 'Closed':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            <FiAlertCircle className="mr-1" /> Đã đóng cửa
+          </span>
+        );      
+    }
+  };
+
 
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col">
@@ -289,13 +310,33 @@ const Dashboard: React.FC = () => {
               <div className="px-4 py-5 sm:p-6">
                 <h3 className="text-lg leading-6 font-medium text-gray-900">Thông tin gian hàng</h3>
                 <div className="mt-4">
-                  {stores.length > 0 ? (
+                {stores.length > 0 ? (
                     <div className="space-y-3">
                       {stores.map((store) => (
                         <div key={store.id} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
                           <div className="flex justify-between items-center">
                             <h4 className="font-medium text-gray-800">{store.name}</h4>
-                            {renderStatusBadge(store.status)}
+                            <div className="flex items-center gap-2">
+                              {renderStatusBadge(store.status)}
+                              {store.status === 'Approved' && (
+                                <>
+                                  {StatusSeller(store.statusStoreSeller)}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleStoreStatus(store.id, store.statusStoreSeller);
+                                    }}
+                                    className={`inline-flex items-center px-3 py-1 rounded-md text-sm font-medium ${
+                                      store.statusStoreSeller === 'Open' 
+                                        ? 'bg-red-100 text-red-800 hover:bg-red-200' 
+                                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                                    }`}
+                                  >
+                                    {store.statusStoreSeller === 'Open' ? 'Đóng cửa' : 'Mở cửa'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <p className="text-sm text-gray-600 mt-1">
                             ID: {store.id}
@@ -303,7 +344,7 @@ const Dashboard: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  )  : (
                     <div className="text-center py-4">
                       <p className="text-gray-500">Bạn chưa có gian hàng nào</p>
                       <button
@@ -524,6 +565,7 @@ const Dashboard: React.FC = () => {
               </div>
             </>
           )}
+
         </div>
       </main>
       <Footer />

@@ -1,40 +1,106 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import { jwtDecode } from 'jwt-decode';
+import { s } from 'framer-motion/dist/types.d-Bq-Qm38R';
 
 interface ReviewItem {
   id: number;
   menuName: string;
+  storeName: string;
   rating: number;
   comment: string;
+  imageUrls: string[];
   createdAt: string;
 }
 
-const storeId = 1; // TODO: Lấy từ router/query thực tế
+interface JwtPayload {
+  sub?: string;
+  [key: string]: any;
+  'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'?: string;
+}
 
 const StoreReview: React.FC = () => {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editComment, setEditComment] = useState('');
 
   useEffect(() => {
     const fetchReviews = async () => {
-      setLoading(true);
-      setError('');
       try {
-        const res = await fetch(`http://localhost:5118/api/Review/store/${storeId}`);
-        if (!res.ok) throw new Error('Lỗi khi tải đánh giá');
-        const data = await res.json();
-        setItems(data);
-      } catch (err: any) {
-        setError(err.message || 'Đã xảy ra lỗi');
+        setLoading(true);
+        setError('');
+        const token = localStorage.getItem('token');
+        console.log('Token from localStorage:', token);
+        if (!token) throw new Error('Không tìm thấy token xác thực');
+
+        const decodedToken = jwtDecode<JwtPayload>(token);
+        console.log('Decoded Token:', decodedToken);
+        const customerId = decodedToken.sub || decodedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+        if (!customerId) throw new Error('Không tìm thấy CustomerId trong token');
+
+        console.log('CustomerId:', customerId);
+        const response = await fetch(`http://localhost:5118/api/Review/store/${customerId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Không thể tải đánh giá: ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('API Response:', result); 
+        const data = Array.isArray(result) ? result : (result.data || []); 
+        const formattedItems = data.map((item: any) => ({
+          id: item.id,
+          menuName: item.menuId ? item.storeName : 'N/A',
+          storeName: item.storeName,
+          rating: item.rating,
+          comment: item.comment,
+          imageUrls: item.imageUrls || [],
+          createdAt: item.createdAt,
+        }));
+        setItems(formattedItems);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi không xác định');
+        console.error('Error:', err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchReviews();
   }, []);
 
+
+  const handleGetReviewsByStore = async (storeId: number) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa đánh giá này?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Không tìm thấy token xác thực');
+
+      const response = await fetch(`http://localhost:5118/api/Review/store/${storeId}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Xóa đánh giá thất bại: ${errorText}`);
+      }
+
+      setItems(items.filter(item => item.id !== storeId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Xóa đánh giá thất bại');
+    }
+  };
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col">
       <Navbar />
@@ -60,7 +126,7 @@ const StoreReview: React.FC = () => {
                 <div className="text-gray-600 text-sm">{item.comment}</div>
               </div>
             ))}
-          </div>
+          </div>       
         )}
       </main>
       <Footer />

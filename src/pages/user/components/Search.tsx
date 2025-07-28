@@ -22,7 +22,9 @@ const Search: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`http://localhost:5118/api/Search?query=${encodeURIComponent(query)}`);
+      
+      
+      const res = await fetch('http://localhost:5118/api/Search/GetSearch');
       if (!res.ok) throw new Error('Lỗi khi tìm kiếm');
       const data = await res.json();
       setResults(data);
@@ -31,6 +33,7 @@ const Search: React.FC = () => {
     } finally {
       setLoading(false);
     }
+
   };
 
   return (
@@ -71,7 +74,7 @@ const Search: React.FC = () => {
         )}
       </main>
       <Footer />
-    </div>
+    </div>  
   );
 };
 
