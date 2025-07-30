@@ -11,7 +11,7 @@ import Cart from './pages/user/components/Cart';
 import Orders from './pages/user/components/Orders';
 import Profile from './pages/user/components/Profile';
 import Review from './pages/user/components/Review';
-import Search from './pages/user/components/Search';
+import SearchResultsPage from './pages/user/components/SearchResultsPage';
 import Location from './pages/user/components/Location';
 import Payment from './pages/user/components/Payment';
 import Notification from './pages/user/components/Notification';
@@ -24,7 +24,7 @@ import PaymentFailed from './pages/user/components/PaymentFailed';
 import Checkout from './pages/user/Checkout';
 import ShippingInfo from './pages/user/ShippingInfo';
 import Wishlist from './pages/user/components/Wishlist';
-
+import ForgotPassword from './pages/user/components/ForgotPassword';
 // Seller pages
 import SellerDashboard from './pages/seller/Dashboard';
 import MyStores from './pages/seller/MyStores';
@@ -62,7 +62,7 @@ function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/review" element={<Review />} />
-          <Route path="/search" element={<Search />} />
+          <Route path="/search" element={<SearchResultsPage />} />
           <Route path="/location" element={<Location />} />
           <Route path="/payment" element={<Payment />} />
           <Route path="/notification" element={<Notification />} />
@@ -75,6 +75,8 @@ function App() {
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/Shipping-info" element={<ShippingInfo />} />
           <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          {/* Redirects for legacy routes */}
 
           {/* Seller routes */}
           <Route path="/seller/dashboard" element={<SellerDashboard />} />
